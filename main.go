@@ -44,60 +44,68 @@ func main() {
 			return
 		}
 
-		var (
-			mt  int
-			msg []byte
-			err error
-		)
+		c.SetReadDeadline(time.Now().Add((60 + 5) * time.Second))
+		c.SetPongHandler(func(string) error { c.SetReadDeadline(time.Now().Add((60 + 5) * time.Second)); return nil })
 
 		ctx := context.Background()
 
-		go func(){
+		go func() {
 			ct, cancel := context.WithCancel(ctx)
-			defer recover()
 			defer cancel()
-
+			defer recover()
 			ticker := time.NewTicker(60 * time.Second)
+			defer ticker.Stop()
 			for {
 				select {
 				case <-ticker.C:
-					l, _ := service.GetNotifcationLength(ct, os.Getenv("GITHUB_KEY"))
-					log.Println(l)
-
-					s := &State{Type: "notifcations"}
-
-					if err == nil{
-						s.Notifcations.Github = l > 0
-					}
-
-					js, err := json.Marshal(s)
-					if err == nil{
-						go func(){
-							defer recover()
-							c.WriteMessage(websocket.TextMessage, js)
-						}()
-					}else{
-						log.Println(err)
-					}
+					go func(){
+						defer recover()
+						c.WriteMessage(websocket.PingMessage, nil)
+					}()
 				case <-ct.Done():
 					return
 				}
 			}
 		}()
 
-		for {
-			if mt, msg, err = c.ReadMessage(); err != nil {
-				log.Println("read:", err)
-				break
-			}
-			log.Printf("recv: %s", msg)
+		ct, cancel := context.WithCancel(ctx)
+		defer cancel()
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		defer recover()
 
-			if err = c.WriteMessage(mt, msg); err != nil {
-				log.Println("write:", err)
-				break
+		for {
+			select {
+			case <-ticker.C:
+				l, err := service.GetNotifcationLength(ct, os.Getenv("GITHUB_KEY"))
+
+				s := &State{Type: "notifcations"}
+
+				if err == nil{
+					s.Notifcations.Github = l > 0
+				}
+
+				js, err := json.Marshal(s)
+				if err == nil{
+					go func(){
+						defer func(){
+							err := recover()
+							if err != nil{
+								log.Println(err)
+							}
+						}()
+						c.WriteMessage(websocket.TextMessage, js)
+						log.Println("sended.")
+					}()
+				}else{
+					log.Println(err)
+				}
+			case <-ct.Done():
+				return
 			}
 		}
 
+		<-ctx.Done()
 	}))
 
 	f.Listen(":3001")
