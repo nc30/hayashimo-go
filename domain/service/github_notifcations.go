@@ -1,13 +1,13 @@
 package service
 
-import(
+import (
 	"context"
 
-	"golang.org/x/oauth2"
 	"github.com/google/go-github/github"
+	"golang.org/x/oauth2"
 )
 
-func GetNotifcationLength(ctx context.Context, access_token string) (int, error){
+func GetNotifcationLength(ctx context.Context, access_token string) (int, error) {
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: access_token},
 	)
